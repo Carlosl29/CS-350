@@ -1,0 +1,518 @@
+/*Project by: Carlos Lopez
+Problems not debugged:
+	Start loacation is randomly chosen
+	Memory gets filled with random instructions
+*/
+//Importing the necessary libraries
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <ctype.h>
+//Import for the library of the cpu struct
+#include "CPUStruct.h"
+
+
+typedef short int Word;
+//Unsigned Addresses are never negative
+//Ex 0x8000-0xffff = 32768 to 65535
+typedef unsigned short int Address;
+
+//The memory is maximum 65535 bits big
+#define MEMLEN 65535
+//Number of registers
+#define NREG 8
+//Maximum size of input 
+#define INPUTLEN 5
+#define HEXBASE 16
+#define DEBUG_ON 1
+
+//The branch opcodes
+const char *brOPC[] = {"NOP", "BRN", "BRZ", "BRP", "BRNZ", "BRNP","BRZP","BRNZP"};
+const char *OPC[] = {"BR", "NOP", "ADD ", "LD ", "ST ", "JSR", "AND ", "LDR ", "STR ", "RTI ", "LDI ", "STI ", "NOT ", "JMP ","RET", "err", "LEA ", "TRAP"};
+
+//Prototypes
+//Main function
+int main(int argc, char *argv[]);
+//Function for getting file, either read
+//from command prompt or default file
+FILE *pGet_datafile(int argc, char *sArgv[]);
+
+//Funtions to initialieze memory and cpu
+void initialize_memory(FILE *pDatafile, CPU *pCpu);
+void initialize_CPU(CPU *pCpu);
+
+//Functions to dump info of components
+void dump_CPU(CPU *pCpu);
+void dump_registers(CPU *pCpu);
+void dump_memory(CPU *pCpu);
+
+//Misc. functions
+//Create an expression
+void expression(int c);
+//Take twos complement of i and base x
+int two_comp(int i, int x);
+//Capitalize the value of c
+Word capitalize(int c);
+//Check if c is a hex value
+Word valid_hex(int c);
+//Convert d into a decimal
+Word to_decimal(int d, int p);
+//Convert x into a hex
+int to_hexadecimal(int x);
+//A Help method for to_hexadecimal
+void hex_helper(int *pC, char *pH);
+
+//Main
+int main(int argc, char *sArgv[])
+{
+	printf("CS 350: Final Proect Phase 2\nCarlos Lopez");
+	//Create 2 cpu's
+	CPU cpu_value, *pCpu = &cpu_value;
+	//Create a file that gets the arguments enter 
+	//into the command prompt
+	FILE *pDatafile = pGet_datafile(argc, sArgv);
+	if(pDatafile == NULL)
+		return 1;
+	initialize_memory(pDatafile, pCpu);			
+	initialize_CPU(pCpu);
+	dump_CPU(pCpu);
+	dump_memory(pCpu);
+}
+
+//Get the parameters from the command line
+FILE *pGet_datafile(int argc, char *sArgv[])
+{	
+	//2 strings that represent name of file to be used
+	//If no file name enter then default file is used
+	char *sDefault_datafile_name = "default.hex";
+	//Name of file entered by user will go here
+	char *sDatafile_name = NULL;
+	
+	//If the user doesn't enter a file name 
+	//then the parameter is only the file
+	//that's going to be used
+	if(argc == 1)
+	{
+		printf("Command Line Parameter Not Found...\nDefault File Loading... \"%s\"\n", sDefault_datafile_name);
+		sDatafile_name = sDefault_datafile_name;
+	}
+	else if(argc == 2)
+	{
+		sDatafile_name = sArgv[1];
+	}
+	printf("\n");
+	
+	//A file is created with the contents of pDatafile_name
+	//it's also set to read.
+	FILE *pDatafile = fopen(sDatafile_name, "r");
+	//If no datafile name is passed then error
+	if(pDatafile == NULL)
+	{
+			printf("File not found/File not opened...");
+			printf("%s\n\n", sDatafile_name);
+			return NULL;
+	}
+	return pDatafile;
+}
+
+//Read and dump initial values of memory
+void initialize_memory(FILE *pDatafile, CPU *pCpu)
+{
+	//A buffer to read num of characters
+	#define BUFFER_LEN 80
+	//Buffer of length 80 is created
+	char buffer[BUFFER_LEN];
+	//words_read = 1 if input starts with a hexadecimal
+	int words_read, loc = 0, done = 0, origin = 1;
+	//fgets(destination for string, maximum characters to read, source of characters to read)
+	//Keep running while there is something to be read
+	//the array buffer has the instruction string
+	while(fgets(buffer, BUFFER_LEN, pDatafile) != NULL)
+	{
+		int count = 0;
+		///////////// 
+		while(count < BUFFER_LEN)
+		{
+			//This is to restart the loop whenever the
+			//value at any index in the array buffer
+			//is 32
+			if(buffer[count] == 32)
+			{
+				count++;
+				continue;
+			}
+			//If the numbers starting at the index (count) and going 4 indexes afterwards, then do the code
+			else if(valid_hex(buffer[count]) && valid_hex(buffer[count + 1]) && valid_hex(buffer[count + 2]) && valid_hex(buffer[count + 3]))
+			{
+				//4 digit hex, plus 1 for the null terminator
+				//Created a array of chars
+				char hex[INPUTLEN];
+				
+				//Just did the function strncpy(dest, src + offset, len)
+				//destination copy the string to is the hex array
+				//src to get the string from is (whereever the buffer is at + the value of count)
+				//only take the first 4 digits of the string found at the src
+				
+				//strncpy(hex, buffer + count, 4); 
+				int i;
+				for(i = 0; i < INPUTLEN; i++)
+				{
+					//takes the value at hex[i] and makes 
+					//sure to capitalize the letters in it;
+					hex[i] = toupper(buffer[i]);
+				}
+				//The fifth digit is the termination character/null
+				hex[4] = '\0';
+				Word sum = 0;
+				for(i = 0; i < INPUTLEN - 1; i++)
+				{
+					//Send the value in hex[i] to be converted to decimal
+					//the power is set up by subtract i + 2 from 5
+					sum = sum + (to_decimal(hex[i], INPUTLEN - (i + 2)));
+				}
+				//If origin is 1
+				if(origin)
+				{
+					//The origin and program counter(pc) are set to
+					//the sum of all the value in the array (hex)
+					//which were all converted to decimal numbers
+					pCpu->origin = hex[];
+					pCpu->pc = sum;
+					//the place the pc of pCpu is, becomes the current location
+					loc = pCpu->pc;
+					//Origin becomes false after all this, so it will only execute once 
+					origin = 0; 
+				}
+				else
+				{
+					//After
+					//pCpu->mem[loc % MEMLEN] = sum;
+					pCpu->origin++;
+				}				
+			}
+			break;// line doesn't have leading space nor valid hexadecimals, exit loop
+		}
+	}
+	//Do the dumps
+	//dump_CPU(pCpu);
+	//dump_memory(pCpu);
+	printf("\n");
+}
+
+//Initialize the CPU( memory, registers, pc, running flag, ir, instruction sign, opcode, register field, memory field)
+//Remember to call initialize_CPU() after initialize_memory()
+//since the memory needs to be set to zero's(do it in main())
+void initialize_CPU(CPU *pCpu)
+{
+	int i;
+	//MEMLEN is 65535 bit long so the loop goes through 
+	//all the memory locations
+	for(i = 0; i < MEMLEN; i++)
+	{
+		//Sets all memory values to 0
+		pCpu->mem[i] = 0; 
+	}
+	for(i = 0; i < NREG; i++)
+	{
+		//Sets all register values to 0
+		pCpu->reg[i] = 0;
+	}
+	//All the aspects of pCpu are set to default
+	pCpu->pc = 0;
+	pCpu->cc = 'Z';
+	pCpu->ir = 0;
+	//If CPU is running, then true => 1
+	pCpu->running = 1;
+	pCpu->instr_sign = 1;
+}
+
+//Print out the control unit and general-purpose registers
+void dump_CPU(CPU *pCpu)
+{
+	printf("\nControl Unit: \n");
+	//New int the takes the pc and 
+	//Converts memory value into hexadecimal and store it in hex[5]
+	//hex_helper(&cast, pHex, 0); 
+	//
+	printf("PC: 0x%d\tIR: 0x%d\tCC: %c\tRUNNING: %d\n", pCpu->pc, pCpu->ir, pCpu->cc, pCpu->running);
+	dump_registers(pCpu);	 
+}
+
+//dump_registers(CPU *pCpu): Print register values in two rows of four.
+void dump_registers(CPU *pCpu)
+{
+	//print each Register with 6 leading spaces
+	for(int i = 0;i < 4; i++)
+	{
+		int regtr = (int)(pCpu->reg[i]);
+		printf("R%01d: 0x%04d\t", i, regtr);
+	}
+	printf("\n");
+	for(int i = 4;i < 8; i++)
+	{
+		int regtr = (int)(pCpu->reg[i]);
+		printf("R%01d: 0x%04d\t", i, regtr);
+	}
+
+}
+
+//dump_memory(CPU *pCpu): For each memory address that contains a non-zero value, 
+//print out a line with the address, the value as an integer, and a the value
+//interpreted as an instruction.
+void dump_memory(CPU *pCpu)
+{
+	int origin = (int)(pCpu->origin);
+	
+	printf("\nMemory (from 0x%d)\n", origin);
+	int count = 0;
+	int i = pCpu->origin;
+
+	while(count < MEMLEN)
+	{
+
+		//i = i%MEMLEN; //makes memory location cyclical, will loop around when maximum is reached
+		if((pCpu->mem[i]) != 0)
+		{
+			//printf("HELP/");
+			//cast = (int)(pCpu->mem[i]);
+			//hex_helper(&cast, pHex); // converts memory value into hexadecimal and store it in hex[5]
+			printf("0x%04x: 0x%d % 7d", i, (Address)pCpu->mem[i], pCpu->mem[i]);
+			expression((int)pCpu->mem[i]);
+
+			i++;
+			count++;
+		}
+		else
+		{
+			i++;
+			count++;	
+		}
+		
+	}
+	printf("\n");
+}
+
+void expression(int c)
+{
+	switch((c & 0xF000) >> 12)
+	{
+		case 0:	printf("\t%s %d\n", brOPC[((c & 0x0F00) >> 9)], two_comp(c, 0x01FF));
+					break;
+		case 1:	if(((c & 0x0020) >> 5) == 1)
+					{
+						printf("\t%s R%d, R%d, %d\n", OPC[1], (c & 0x0F00) >> 9, (c & 0x01F0) >> 6, two_comp(c, 0x001F));
+					}
+					else
+					{
+						printf("\t%s R%d, R%d, R%d\n", OPC[1], (c & 0x0F000) >> 9, (c & 0x01F0) >> 6, (c & 0x0007));
+					}
+					break;
+		case 2:		// LD	  DR ,	PCoffset9
+		case 3:		//	ST	  Src,	PCoffset9
+		case 10:	//	LDI  Dst,   PCoffset9
+		case 11: 	// STI  Src,   PCoffset9
+		case 14: 	// LEA  Dst,   PCoffset9
+						printf("\t%s R%d, %d\n", OPC[(c & 0xF000) >> 12], (c & 0x0F00) >> 9, two_comp(c, 0x01FF));
+						break;
+		case 4: 	 // JSR 1b1 PCoffset11				JSRR 3b000 Base 6b000000
+					if(((c & 0x0F00) >> 11) == 1)
+					{
+						printf("\t%s  %d\n", OPC[4], two_comp(c, 0x07FF));
+					}
+					else
+					{
+						printf("\t%sR R%d\n", OPC[4], (c & 0x01F0) >> 6);
+					}
+					break;
+		case 5: 	 //AND Dst, Src1, 3b00, Src2      AND Dst, Src, 0b1, Imm5
+					if(((c & 0x0020) >> 5) == 1)
+					{
+						printf("\t%s R%d, R%d, %d\n", OPC[5], (c & 0x0F00) >> 9, (c & 0x01F0) >> 6, two_comp(c, 0x001F));
+					}
+					else
+					{
+						printf("\t%s R%d, R%d, R%d\n", OPC[1], (c & 0x0F00) >> 9, (c & 0x01F0) >> 6, (c & 0x0007));
+					}
+					break;
+		case 6:  	// LDR Dst, Base, PCoffset6
+		case 7: 	 // STR Dst, Base, PCoffset6
+					printf("\t%s R%d, R%d, %d\n", OPC[(c & 0xF000) >> 12], (c & 0x0F00) >> 9, (c &0x01F0) >> 6, two_comp(c, 0x003f)); //((c& 0x003F) > 31)? ((c & 0x003F)%32)-32 : (c & 0x003F)
+					break;
+		case 8:  	//RTI 4b0000 4b0000 4b0000
+		case 13: 	//ERR 4b0000 4b0000 4b0000(unused opcode)
+					printf("\t%s\n", OPC[(c & 0xF000) >> 12]);
+					break;
+		case 9:  	// NOT ST Dst Src1 6b111111
+					printf("\t%s R%d, R%d\n", OPC[9], (c & 0x0F00) >> 9, (c & 0x01F0) >> 6);
+					break;
+		case 12:  //Jmp 4b000 Base 6b00000
+					printf("\t%s R%d\n", OPC[12], (c & 0x01F0) >> 6);
+					break;
+		case 15:  // TRAP 4b0000  TrapVec8
+					printf("\t%s 0x%X\n", OPC[15], (c & 0x00FF));
+					break;
+		default:
+					printf("Unknown opcode: ");
+					printf("%d\n\n", (c & 0xF000) >> 12);
+					break;
+	}
+}
+/* two_comp(int i, int x): int -> takes (integer, hexadecimal) returns two_comp int
+	Taking the two's complement means that the upper half of the maximum numbers are negative
+	int i is the number passed in to be evaluated, int x is the mask that filters where the the evaluation will : (i & x)
+	Since int x is the masimum value, the middle value is (x/2), middle value is also where the number will circle around to negatives
+	The modulo operator is useful in number circles E.g(i % (x/2)) where the x/2 is the masimum number that can be reached before returning back to 0
+	The subtraction by -(x/2) after modulo inverse the number to make it match two's complement where from 0b011 to 0b100 is from 3 to -4 rather than 3 to 0
+	The subtraction also accounts for the addition of 1 at the end when taking two's complement
+	Ex: ((i & 0x01FF) > 255)?  ((i & 0x01FF) % 256) - 256 : (i & 0x01FF)
+		 ((i & 0x003F) > 31)? ((i & 0x003F) % 32) - 32 : (i & 0x003F)
+		 ((i & 0x001F) > 15)? ((i & 0x001F) % 16) - 16 : (i & 0x001F)
+*/
+
+int two_comp(int i, int x)
+{
+	//////////////////////////////////////////////////
+	/*int num = to_hexadecimal(i);
+	int binaryNum;
+	while((num / 2) != 0)
+	{
+		binary += num % 2;
+		binary << 1;
+	}
+	
+	int output = (((i & x) > (int)(x/2)) ? (i & x) : (((int)x/2) + 1) - (((int)x/2) + 1)) 
+	*/
+	int output;
+	if((i & x) > (int)(x/2))
+	{
+		output = ((i & x) % (((int) x/2) + 1)) - (((int) x/2) + 1);
+		return output;
+	}
+	else
+	{
+		output = (i & x);
+		return output;
+	}
+}
+
+//Determines if inputs are actual hexadecimals: has only characters '0123456789ABCDEF' and '0123456789abcdef'
+//A returns true if the value passed is within the ranges below
+Word valid_hex(int c)
+{
+	//       num is from [0:9]     num is from [A:F]	   num is from [a:f]
+	if((47 < c && c < 58) || (64 < c && c < 71) || (96 < c && c < 103))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+//Takes base 10 "hexadecimal"(the 4 digits not really a hex num)
+//and converts them into short int's
+//the first argument is the number to be converted
+//the second number is the power to put 16 to, or the space
+//in the number that d is in
+//e.g.: 4DC2, 4 is in the 16^3 place, D is in the 16^2 place
+// C is in the 16^1 place and 2 is in the 16^0 place
+//*/
+
+Word to_decimal(int d, int p)
+{
+	Word numReturn;
+	int power = 1;
+	if(d >= 64)
+	{
+		numReturn = ((d - 'A' + 10) * (pow(HEXBASE, p)));
+		return numReturn;
+	}
+	else
+	{
+		numReturn = ((d - '0') * (pow(HEXBASE, p)));
+		return numReturn;
+	}
+}
+
+
+//Take individual decimal digits and convert it into hexadecimal digits ASCII
+//If x is greater than 10, ie digits from 'ABCDEF'
+//then subtract 10 to remove offset (0-9)
+//From there move 'A' away from there or 65 away from there('A' = 65 in ASCII)
+/*int to_hexadecimal(int num)
+{
+	static int rem[50];
+	int i=0;
+	int length=0;
+	long int finalNum = 0000;
+
+	while(num>0)
+	{
+		rem[i] = num % 16;
+		num = num / 16;
+		i++;
+		length++;
+	}
+
+	//printf("Hexadecimal number : ");
+	for(i = length-1; i >= 0; i--)
+	{
+		switch(rem[i])
+		{
+			case 10:
+				rem[i] = (int)('A');
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("A");
+				break;
+			case 11:
+				rem[i] = (int)('B');
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("B");
+				break;
+			case 12:
+				rem[i] = (int)('C');
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("C");
+				break;
+			case 13:
+				rem[i] = (int)('D');
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("D");
+				break;
+			case 14:
+				rem[i] = (int)('E');
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("E");
+				break;
+			case 15:
+				rem[i] = (int)('F');
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("F");
+				break;
+			default :
+				rem[i] = rem[i];
+				finalNum = ((finalNum << 1) + rem[i]);
+	//			printf("%d",rem[i]);
+		}
+	}
+	return finalNum;
+}*/
+
+/*
+	Helps convert each digit of base 10 hexadecimal into base 16 hexadecimal
+		x[0] = to_hexadecimal(((c & 0xF000) >> 12));
+		x[1] = to_hexadecimal(((c & 0x0F00) >> 8));
+		x[2] = to_hexadecimal(((c & 0x00F0) >> 4));
+		x[3] = to_hexadecimal(((c & 0x000F)));
+*/
+/*void hex_helper(int *pC, char *pX)
+{
+	for(int i = 0; i < INPUTLEN - 1; i++)
+	{
+		pX[INPUTLEN - (2 + i)] = to_hexadecimal(((*pC) & (0x000F << 4*i)) >> 4*i);	
+	}
+	pX[4] = '\0';
+}*/
+

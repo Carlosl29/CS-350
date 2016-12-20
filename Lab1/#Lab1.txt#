@@ -1,0 +1,48 @@
+1.     [1 pt]	Read as an unsigned binary number, 110111 represents what decimal value?
+       	  	>55
+      
+2.     [3 pts]  Let V be the decimal value from Problem 1; what is the 7-bit representation 
+       	  	of -V in (a) sign-magnitude, (b)1's complement, and (c)2's complement? (Add a
+		sign bit and possibly modify the 6 bits inherited from problem
+		a.)1110111
+		b.)1001000
+		c.)1001001
+
+3.     [3 pts] Reading 110111 as a signed 6-bit value, what are the bitstring and decimal
+       	       representations of -(110111) in (a)sign-magnitude, (b)1's complement, and (c)
+	       2's complement?
+	       a.)001000 => 8_10
+	       b.)
+	       
+4.     [6 = 3*2 pts] What is the bitstring and decimal value for the most negative 6-bit
+       	    	     number in (a)sign-magnitude, (b)1's complement, and (c)2's complement?
+		     a.)111111 => -31
+		     b.)100000 => -31
+		     c.)100001 => -32
+
+5.     [6 = 3*2 pts] What is the bitstring and decimal value for the most negative n-bit
+       	    	     number in (a)sign-magnitude, (b)1's complement, and (c)2's complement?
+		     a.)1^(n)...  => -(2^n)
+		     b.)10^(n)... => -(2^n)
+		     c.)10^(n-1)...1 => (2^(n) - 1) 
+		     
+6.     [4 pts]  Which of the three systems have two forms of zero ("positive" and 
+       	  	"negative" zero), and how do you write them in each of those systems?
+		Sign-Magnitude ==> 000...00 = +0, 100...00 = -0
+		1's Complement ==> 000...00 = +0, 111...11 = -0
+		
+7.     [2 pts]  In which (if any) of the three systems does taking the negative of the most 
+       	  	negative number cause overflow?  What about the negative of the most positive
+		number?
+		In 2'complement taking the negative of the most negative causes overflow.
+		Taking the negative of the most positive doesn't cause overflow.
+		
+8.     [2 pts] What is 111011 + 001110, using unsigned addition?  Does overflow occur?
+       	       111011 => 32+16+8+2+1 = 59
+	      +001110 => 8+4+2 = 14
+	      1001001 => 64+8+1 = 73
+	      
+9.     [2 pts] What is 111000 – 001101, using unsigned subtraction?
+       	       111000
+	      -001101
+	       101011

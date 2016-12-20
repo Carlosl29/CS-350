@@ -1,0 +1,455 @@
+//Header files to be included
+#include <stdio.h>
+#include <stdlib.h>
+#include "CPUStruct.h"
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//New data types are defined/created
+
+//This represents a word of SDC memory		
+typedef short int Word;          
+//This represents an SDC address
+typedef unsigned char Address;   
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Constants declared
+#define MEMLEN 100
+#define NREG 10
+
+///////////////////////////////////////////////////////////////////////////////////////////
+//Arrays of op codes, they are just strings that are printed out
+//so that the user may see what opcode is used, they 
+//don't actually do an operation
+
+//This is an arrray that holds the Signed
+//instructions, in other words the Branch instructions
+const char *aSigned_instr[] = {"BRN", "BRZ", "BRP"};
+
+//This array holds the instructions for the opcodes 0-8
+const char *aInitialOPCodes[] = {"HALT", "LD", "ST", "ADD", "NEG", "LDM", "ADDM", "BR", "BRC"};
+
+//This array holds the isntructions for the opcodes 90-99
+const char *aFina	lOPCodes[] = {"GETC", "OUT", "PUTS", "DMP", "MEM", "Null", "Null", "Null", "Null", "Null"};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Prototypes - tell the computer what is going to be used in the program
+
+int main(int argc, char *sArgv[]);
+void initialize_CPU(CPU *pCpu);
+void initialize_memory(int argc, char *sArgv[], CPU *pCpu);
+FILE *pGet_dataFile(int argc, char *sArgv[]);
+void dump_CPU(CPU *pCpu);
+void dump_memory(CPU *pCpu);
+void dump_registers(CPU *pCpu);
+
+int read_execute_command(CPU *pCpu);
+int execute_command(char cmd_char, CPU *pCpu);
+void help_message(void);
+void many_instruction_cycles(int nbr_cycles, CPU *pCpu);
+void one_instruction_cycle(CPU *pCpu);
+
+void exec_HLT(CPU *pCpu);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+int main(int argc, char *sArgv[])
+{
+	printf("SDC Simulator pt 1 skeleton: CS 350 Lab 6\n");
+	CPU cpu_value;
+	CPU *pCpu = &cpu_value;
+	initialize_CPU(pCpu);
+	initialize_memory(argc, sArgv, pCpu);
+	
+	char *prompt = "> ";
+	printf("\nBeginning execution; type h for help\n%s", prompt);
+
+	int done = read_execute_command(pCpu);
+	while (!done) {
+		printf("%s", prompt);
+		done = read_execute_command(pCpu);
+	}	
+	return 0;
+}//End of main function
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void initialize_CPU(CPU *pCpu)
+{	//Initializing attributes
+	pCpu->pc = 0;
+	pCpu->ir = 0;
+	pCpu->instr_sign = 1;
+	pCpu->running = 1;
+	
+	//A for loop to set each value of the array "reg" to 0
+	for(int i = 0; i < NREG; i++)
+	{
+		pCpu->reg[i] = 0;
+	}
+	
+	printf("\nInitial CPU:\n");
+	//Calls the function dump_CPU and prints out all the attributes of the cpu
+	dump_CPU(pCpu);
+	printf("\n");
+}// End of initialize_CPU
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Read and dump initial values for memory
+//
+void initialize_memory(int argc, char *sArgv[], CPU *pCpu) 
+{
+    FILE *pDatafile = pGet_dataFile(argc, sArgv);
+    //pDatafile = fopen(sArgv);
+    //puts(pDatafile);
+	
+	//This is a buffer created to recieve the next line of text that is read
+	//Defined the constant variable
+	#define BUFFER_LEN 80
+	//An array of 80 characters
+	char buffer[BUFFER_LEN];
+
+	//This will now read the next line of text
+	//If it started reading with a memory value, set words_read = 1
+	//This will also set the memory location, loc, to value_read
+	int value_read, words_read, loc = 0, done = 0;
+
+	//New string declared
+	char *read_success;
+
+	//Sets the string to contain the value of buffer, BUFFER_LEN, and datafile
+	read_success = fgets(buffer, BUFFER_LEN, pDatafile);
+
+	//A while loop is created that runs as long as it hasn't
+	//successfully read anything and it also hasn't finished
+	while(read_success != NULL && !done)
+	{
+		//	If the line of input begins with an integer, treat
+		//	it as the memory value to read in.  Ignore junk
+		// after the number and ignore blank lines and lines
+		// that don't begin with a number.
+		
+		//This counts the number of words read
+		//Takes the buffer array and prints out the address of value_read
+		words_read = sscanf(buffer, "%d", &value_read);
+		
+		//Stub
+		//Task1: 
+		//	Set value_read to the memory value that is at the
+		//	current location, then increment the current location.
+		//	Exceptions: 
+		//		When loc is outside of range, complain and quit out of loop
+		//		When the value at value_read is a sentinel, we tell the
+		//		user and quit out of the loop
+		//	Finally get the next line of data and continue the loop
+		
+		//This first if statement makes sure that the location(loc)
+		//is with in the range(MEMLEN)
+		//If it is outside we quit the loop
+		if(loc < MEMLEN && words_read == 1)
+		{
+			//This if statement is to see whether or not the value_read 
+			//is a sentinel value, and if it is we quit
+			//A sentinel is any number greater than 9999 or less than -9999
+			if(value_read < 9999 && value_read > -9999)
+			{
+				//Assigns the value that was read(value_read) to the current
+				//memory location
+				pCpu->mem[loc] = value_read;
+				//The instructions then say to increment the location
+				loc++;
+			}
+			else
+			{
+				//A warning statement about a sentinel value found
+				printf("\nSentinel value: %d \t Location: %d\n\n", value_read, loc);
+				done = 1;
+			}
+		}
+		//Gets the next line of data that is housed in the buffer array
+		
+		read_success = fgets(buffer, BUFFER_LEN, pDatafile);
+		
+	}
+	
+	//Now initialize the rest of the memory
+	//As long as the location, loc, is within the limit of how big
+	//MEMLEN can be, then the loop continues.
+	//MEMLEN is the length of the memory, which is set as a constant
+	while(loc < MEMLEN)
+	{
+		//The location in the mem array is reset to 0,
+		// all from the struct pCpu
+		pCpu -> mem[loc++] = 0;
+	}
+	//Print out the pCpu
+	dump_memory(pCpu);
+	
+}//End of initialize_memory function
+
+FILE *pGet_dataFile(int argc, char *sArgv[])
+{
+	//Creates a string with the name of the default file to read from
+	char *sDefault_dataFile_name = "Lab6_default.sdc";
+	//Creates a string with the name of the file entered by user
+	char *sDataFile_name = NULL;
+	
+	//////////////////////////////////////////////////////////////
+	//If the user does not input a file name
+	if(argc != 2)
+	{
+		printf("No File Name Inputed");
+		sDataFile_name = sDefault_dataFile_name;
+	}
+	else
+	{
+		sDataFile_name = sArgv[1];
+	}
+	
+	FILE *pDataFile = fopen(sDataFile_name, "r");
+	//////////////////////////////////////////////////////////////
+	//This is a test to see whether or not the file was opened
+	//and if it wasn't, then the program tells the user and 
+	//exits the program.
+	if(pDataFile == NULL)
+	{
+		printf("The file could not be opened.");
+		exit(EXIT_FAILURE);	
+	}
+	
+	return pDataFile;
+	
+}
+//////////////////////////////////////////////////////////////////
+//These functions dump/print out the values of each CPU
+
+//This function prints out the control unit and
+//the contents in the reg[] array(general-purpose registers)
+void dump_CPU(CPU *pCpu)
+{
+	//First line that is printed, according to the format in the lab 6 instructions
+	printf("PC:\t%d IR:\t%d Running: %d\n\n", pCpu->pc, pCpu->ir, pCpu->running);
+	dump_registers(pCpu);
+}
+
+
+//This function prints out all the registers
+//Which means it prints out all the values in the array reg[]
+//The format: two rows of five values in each row
+void dump_registers(CPU *pCpu)
+{
+	//First 5 registers are printed
+	for(int a = 0; a < 5; a++)
+	{
+		printf("R%d:\t%d ", a, pCpu->reg[a]);
+	}
+	//Kick the printer to a new line
+	printf("\n");
+	//The last 5 registers are printed
+	for(int a = 0; a < 5; a++)
+	{
+		printf("R%d:\t%d ", a+5, pCpu->reg[a+5]);
+	}
+}
+
+//This function prints out the memory
+//Which means it prints out the address, the value(as an int),
+//and the the value in the form of instructions
+void dump_memory(CPU *pCpu)
+{	
+	//Printing the categories
+	printf("Memory:\n@loc\tValue\tInstructions\n");
+	printf("---\t-----\t------------\n");
+	
+	int sign;
+	//For loop to go throught all the memory address
+	//and get whats inside them
+	for(int i = 0; i < MEMLEN; i++)
+	{
+		//Every time the program runs the loop, its
+		//going to print out all the data from that
+		//it finds at the memory location
+		if(pCpu->mem[i] != 0)
+		{
+			//The location is printed
+			printf("@ %02d\t%04d", i,pCpu->mem[i]);
+		
+			/////////////////////////////////////////////////////////////
+			//The opcodes are printed
+			
+			//If the opcode is 90-99
+			if(abs((pCpu->mem[i]) / 1000) == 9)
+			{
+				printf("\t%s", aFinalOPCodes[abs(((pCpu->mem[i]) / 100) % 10)]);
+			}
+			else
+			{
+			 printf("\t%s", aInitialOPCodes[abs((pCpu -> mem[i]) / 1000)]);
+			}
+			
+			//////////////////////////////////////////////////////////////////////
+			//The registers are printed next
+			//This prints out the register, when it's not 0 or if opcode is 9
+			if(abs((pCpu->mem[i] / 100) % 10) != 0 && abs((pCpu->mem[i]) / 1000) != 9 && abs((pCpu->mem[i]) / 1000) != 7)
+			{
+				printf("\tR%d,",abs(((pCpu->mem[i]) / 100) % 10));
+			}
+			else
+			{
+				printf("\t   ");
+			}
+			//////////////////////////////////////////////////////////////////////
+			//The the values to be used are printed
+			if(abs(((pCpu->mem[i]) / 100) % 100) != 0 && (pCpu->mem[i]) % 100 != 0 && abs((pCpu->mem[i] / 1000) != 4))
+			{
+				printf(" %02d", pCpu->mem[i] % 100);
+			}
+			printf("\n");
+			////////////////////////////////////////////////////////////////////////
+			
+		}
+	}
+}
+
+int read_execute_command(CPU *pCpu){
+
+	#define CMD_LINE_LEN 80
+	char cmd_line[CMD_LINE_LEN];
+	char *read_success;
+	
+	int nbr_cycles;
+	char cmd_char;
+	int done = 0;
+	
+	//cmd_line now has the input of the keyboard
+	read_success = fgets(cmd_line, CMD_LINE_LEN, stdin);
+
+	// *** STUB ***  Quit if read_success indicates end-of-file
+	if(read_success == NULL)
+	{
+		return done;
+	}
+	else
+	{
+		while(!done)
+		{	
+			printf("Please enter a command: ");
+			cmd_char = getchar();
+	
+			if(cmd_char == 'q')
+			{
+				printf("Character 'q' entered.");
+				printf("Quitting...");
+				done = 1;
+			}
+			else if((cmd_char == 'h') || (cmd_char == '?'))
+			{
+				printf("Character 'h/?' entered.");
+				help_message();		
+				printf("You were helped...");	
+			}
+			else if(cmd_char == 'd')
+			{
+				printf("Character 'd' entered.");
+				printf("Dumping info...");
+				dump_CPU(pCpu);
+				dump_memory(pCpu);
+				dump_registers(pCpu);
+				
+			}
+			else if(cmd_char == '\0')
+			{
+				printf("Nothing entered, default run of cycle is 1...");
+				nbr_cycles = 1;
+			}
+			else
+			{
+				if(cmd_char < 1)
+				{
+					printf("Incorrect amount entered");
+				}
+				else if(cmd_char > 50)
+				{
+					return nbr_cycles = 30;
+				}
+				else
+				{
+					nbr_cycles = cmd_char;
+					return nbr_cycles;
+				}
+			}
+		}
+	}
+	// *** STUB ***
+	// while not done,
+	//      Handle q, h, ?, d commands, integer (nbr of instruction cycles),
+	//          or empty line (one instruction cycle)
+	//      Read next command line
+//	return done;
+}
+
+// Execute a nonnumeric command; complain if it's not 'h', '?', 'd', 'q' or '\n'
+// Return true for the q command, false otherwise
+//
+int execute_command(char cmd_char, CPU *pCpu) {
+	if (cmd_char == '?' || cmd_char == 'h') {
+		help_message();
+	}
+	// *** STUB ****
+	return 0;
+}
+
+// Print standard message for simulator help command ('h' or '?')
+//
+void help_message(void) {
+// *** STUB ****
+
+}
+
+// Execute a number of instruction cycles.  Exceptions: If the
+// number of cycles is <= 0, complain and return; if the CPU is
+// not running, say so and return; if the number of cycles is
+// insanely large, complain and substitute a saner limit.
+//
+// If, as we execute the many cycles, the CPU stops running,
+// stop and return.
+//
+void many_instruction_cycles(int nbr_cycles, CPU *pCpu) {
+int INSANE_NBR_CYCLES = 100;
+
+// *** STUB ****
+}
+
+// Execute one instruction cycle
+//
+void one_instruction_cycle(CPU *pCpu) {
+// If the CPU isn't running, say so and return.
+// If the pc is out of range, complain and stop running the CPU.
+//
+// *** STUB ****
+
+// Get instruction and increment pc
+//
+int instr_loc = cpu -> pc;  // Instruction's location (pc before increment)
+cpu -> ir = cpu -> mem[cpu -> pc];
+(cpu -> pc)++;
+
+// Decode instruction into opcode, reg_R, addr_MM, and instruction sign
+//
+// *** STUB ****
+
+// Echo instruction
+// *** STUB ***
+
+switch (cpu -> opcode) {
+case 0: exec_HLT(cpu); break;
+// *** STUB ****
+default: printf("Bad opcode!? %d\n", cpu -> opcode);
+}
+}
+
+// Execute the halt instruction (make CPU stop running)
+//
+void exec_HLT(CPU *pCpu) {
+printf("HALT\nHalting\n");
+cpu -> running = 0;
+}
+
+	
+	
+	

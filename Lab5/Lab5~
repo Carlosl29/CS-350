@@ -1,0 +1,15 @@
+1) 
+	int b[] = {2,4,2,8};
+	
+	int *p, *q, *r;
+	p = &b[0];
+	q = &b[1];
+	r = &b[2];
+	
+2)
+	a)	This input doesn't produce a compile-time warning or error, produces a runtime, in which there is an incorrect comparison between pointer and integer, and it evaluates to true.
+	b)	This input doesn't produce any compile-time or runtime error.  The comparison evaluates to true.
+	c)	This input doesn't produce any compile-time or runtime error.  The comparison evaluates to false.
+	d)	This input doesn't produce any compile-time or runtime error.  The comparison evaluates to true.
+	e)	This input doesn't produce any compile-time or runtime error.  The comparison evaluates to true.
+	f)

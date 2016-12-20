@@ -1,0 +1,14 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+
+
+typedef short int Word;
+typedeft unsigned short int Address;
+
+#define MEMLEN 65535
+#define NREG 8
+#define INPUTLEN 5
+#define HEXBASE 16
+
+const char *brOPC[] = {"NOP", "BRN", "BRZ", "BRP", "BRNZ", "BRNP","BRZP","BRNZP"};
